@@ -8,14 +8,19 @@ public with sharing class ContactTriggerHelper
 	}
 
 	public static void markRecordsToSync(Map<Id,Contact> previousValues, Map<Id,Contact>  newValues){
+		Set<Id> contactsIds = new Set<Id>();
 		for(Contact oldContact : previousValues.values()){
 			Contact newContact = newValues.get(oldContact.Id);
 			if(oldContact.Email != newContact.Email){
-				newContact.SyncStatus__c = 'PENDING';
+				contactsIds.add(oldContact.Id);
 			}
+
 		}
 		System.debug('calling feature method:' );
-		KAR_ContactPlatformCall.synchContacts(newValues.keySet());
+		if(contactsIds.size() > 0 ){
+			System.enqueueJob(new KAR_ContactPlatformCall(contactsIds));
+		}
+		System.debug('end off trigger' );
 
 	}
 

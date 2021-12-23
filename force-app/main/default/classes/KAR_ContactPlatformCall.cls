@@ -1,9 +1,12 @@
-public with sharing class KAR_ContactPlatformCall
+public with sharing class KAR_ContactPlatformCall implements Queueable,Database.AllowsCallouts
 {
+	public  Set<Id> contactsIds{get;Set;}
 
-	@Future(Callout=true)
-	public static void synchContacts(Set<Id> contactsIds){
+	public KAR_ContactPlatformCall(Set<Id> contactsIds){
+		this.contactsIds = contactsIds;
+	}
 
+	public  void execute(QueueableContext context) {
 		HttpRequest request = new httprequest();
 		List<contactEndpoint__c> endpoints = [select endpointurl__c from contactEndpoint__c];
 
@@ -18,20 +21,29 @@ public with sharing class KAR_ContactPlatformCall
 			endpoint = endpoints.get(0).endpointurl__c;
 		}
 
-
-
 		String endpointULR = [select endpointurl__c from contactEndpoint__c][0].endpointurl__c;
 		request.setEndpoint(endpointULR);
 		//request.setEndpoint('callout:SharePoint_credentials/c2c095a8-a041-4c30-93db-8f6b6c07e3df/oauth2/token');
 		request.setMethod('PUT');
 		request.setTimeout(20000);
 		request.setHeader('Content-Type', 'application/json');
-		List<Contact> contacts = [SELECT patientsId__c,Email,FirstName,LastName FROM Contact WHERE Id IN :contactsIds and SyncStatus__c = 'PENDING'];
+		List<Contact> contacts = [SELECT patientsId__c,Email,FirstName,LastName,SyncStatus__c
+									FROM Contact
+									WHERE Id in:this.contactsIds];
 		System.debug('contacts to be sent:' +JSON.serialize(getExternalContactVos(contacts)));
 		request.setBody(JSON.serialize(getExternalContactVos(contacts)));
 
 		httpResponse Response = new http().send(request);
 		system.debug('contacts created: ' + response.getStatusCode());
+		String status = 'PENDING';
+		if(response.getStatusCode() == 200){
+			status = 'SYNCH';
+		}
+
+		for(Contact contact:contacts){
+			contact.SyncStatus__c = status;
+		}
+		update  contacts;
 
 	}
 
